@@ -1,0 +1,385 @@
+---
+title: "Cheatsheet for the minimum stats/plotting needed for UG Psychology."
+date: ~
+output: tufte::tufte_handout
+---
+
+
+# Pre-reqs
+
+```{r}
+library(tidyverse)
+library(pander)
+library(broom)
+```
+
+  
+# Working with data
+
+Have a look at the data:
+
+```{r}
+airquality %>% glimpse
+```
+
+
+```{r}
+airquality %>% 
+  head
+```
+
+
+
+## Selecting columns, filtering rows and sorting
+
+Select rows and or columns; sorting; show first 3:
+
+```{r}
+gapminder::gapminder %>% 
+  filter(lifeExp > 80) %>% 
+  arrange(year) %>% 
+  select(year, country) %>% 
+  head(3)
+```
+
+
+
+## Group by, and summarise
+
+```{r}
+lme4::sleepstudy %>% 
+  group_by(Subject) %>% 
+  summarise(mean(Reaction)) %>% 
+  head(5)
+```
+
+
+
+## Reshaping long to wide
+
+Filter, select and spread wide:
+
+```{r}
+gapminder::gapminder %>% 
+  filter(year>2000) %>% 
+  select(year, country, lifeExp) %>% 
+  spread(year, lifeExp) %>% 
+  head(5)
+```
+
+
+
+## Reshaping wide to long
+
+Gather from wide to long form:
+
+```{r}
+iris %>%
+  gather(variable, value, -Species) %>% 
+  head
+```
+
+
+Or using `data.table` and `melt`:
+
+```{r}
+library(data.table)
+iris %>%
+  melt(id.var="Species") %>% 
+  sample_n(10)
+```
+
+
+
+
+## Joining two separate datasets:
+
+```{r}
+demographics <- data_frame(person = c(1,2,3), age = c(23, 25, 21))
+responses <- data_frame(person=c(1,1,1, 2,2,2), trial = c(1,2,3, 1,2,3), rt = c(230,245,232, 343,356,374))
+
+left_join(responses, demographics, by="person")
+```
+
+
+
+
+
+## Creating combinations for conditions for an experiment design
+
+```{r}
+design <- expand.grid(condition = c("A", "B"), 
+            stimulus = LETTERS[1:3], 
+            participant = 1:20)
+
+design %>% head(10)
+```
+
+Randomising presentation within-participant:
+
+```{r}
+design %>% 
+  mutate(i = runif(n())) %>% 
+  arrange(participant, i) %>% 
+  mutate(trial = row_number()) %>% 
+  select(participant, trial, everything(), -i) %>% 
+  head(10)
+```
+
+
+
+
+\clearpage
+
+# Plotting
+
+
+```{r}
+gapminder::gapminder %>% 
+  ggplot(aes(year, lifeExp, group=year)) + 
+  geom_boxplot()
+```
+
+
+```{r}
+gapminder::gapminder %>% 
+  ggplot(aes(year, lifeExp, color=continent)) + 
+  geom_point(position="jitter", alpha=.5, size=.75) + 
+  geom_smooth() + 
+  ylab("Life expectancy")
+```
+
+
+
+
+
+```{r}
+lme4::sleepstudy %>% 
+  ggplot(aes(Days, Reaction)) + 
+  geom_point(alpha=.3, size=.75) +
+  geom_smooth(se=F, method="lm") + 
+  facet_wrap(~Subject)
+```
+
+
+
+```{r}
+mtcars %>% 
+  mutate(am = factor(am, labels=c("Manual", "Automatic")), cyl=factor(cyl)) %>% 
+  ggplot(aes(am, mpg, color=cyl, group=cyl)) +
+  stat_summary(geom="pointrange", fun.data=mean_cl_boot) + 
+  stat_summary(geom="line", fun.data=mean_cl_boot) + 
+  xlab("")
+```
+
+
+
+
+
+\clearpage
+
+
+# Correlation
+
+
+As a plot:
+
+```{r, message=F, warning=F}
+GGally::ggpairs(airquality)
+```
+
+
+
+A table in APA format:
+
+```{r}
+apaTables::apa.cor.table(airquality)
+```
+
+As a `data_frame`:
+
+```{r}
+air.cor <- psych::corr.test(airquality)
+air.cor$r %>% 
+  broom::tidy()
+```
+
+
+
+
+
+\clearpage
+
+# Chi Sq
+
+First make a table of counts with `xtabs`:
+
+```{r}
+geartable <- xtabs(~gear+cyl, data=mtcars)
+geartable
+```
+
+
+Then run the test on the table:
+
+```{r}
+chisq.test(geartable)
+```
+
+
+
+
+\clearpage
+
+# Linear models
+
+Examples of simple regression; multiple regression with interaction; multiple regression with interaction of continuous by categorical predictors. 
+
+```{r}
+m1 <- lm(mpg ~ wt , data=mtcars)
+m2 <- lm(mpg ~ wt*cyl , data=mtcars)
+m3 <- lm(mpg ~ wt*factor(cyl) , data=mtcars)
+```
+
+
+
+## Coefficient summaries from models
+
+```{r}
+summary(m1)
+```
+
+
+Extracting model coefficients as a dataframe:
+
+```{r}
+m2 %>% 
+  broom::tidy(conf.int=T) %>% 
+  pander
+```
+
+
+Extracting model fit details too:
+
+```{r}
+m2 %>% 
+  broom::glance() %>% 
+  pander
+```
+
+
+
+
+## Anova tables
+
+
+```{r}
+car::Anova(m3, type=3)
+```
+
+
+Format in APA format:
+
+```{r}
+apaTables::apa.aov.table(m3)
+```
+
+
+
+## Post-hoc tests
+
+Run a suitable model:
+
+```{r}
+m4 <- lm(conformity ~ fcategory*partner.status, data=car::Moore)
+car::Anova(m4)
+```
+
+
+And plot the marginal means:
+
+```{r}
+lsmeans::lsmeans(m4, ~partner.status*fcategory) %>% 
+  broom::tidy() %>% 
+  ggplot(aes(partner.status, estimate, ymin=conf.low, ymax=conf.high)) + 
+  geom_pointrange() +
+  facet_wrap(~paste0("fcategory=", fcategory)) 
+```
+
+
+
+And extract the pairwise test statistics with FDR correction:
+
+```{r}
+pairs(lsmeans::lsmeans(m4, ~partner.status*fcategory), adjust="fdr") %>% 
+  broom::tidy() %>% 
+  pander(caption="Pairwise tests, with FDR correction.")
+```
+
+
+
+
+## Repeated measures Anova/Mixed Models
+
+These models are (roughly) equivalent ways of doing the similar things:
+
+```{r}
+data(obk.long, package = "afex")
+
+rm1 <- afex::aov_4(value ~ treatment * gender + (phase * hour | id), 
+        data = obk.long, observed = "gender")
+
+rm2 <- lmerTest::lmer(value ~ treatment * gender * hour * phase + (1 | id), data=obk.long)
+```
+
+
+The Anova tables for each model:
+
+```{r}
+anova(rm1)
+
+lmerTest::anova(rm2)
+```
+
+
+Extract means/contrasts for groups:
+
+```{r}
+lsmeans::lsmeans(rm1, ~treatment)
+pairs(lsmeans::lsmeans(rm1, ~treatment))
+
+lmerTest::difflsmeans(rm2, "treatment")
+```
+
+
+Plotting the results of the model:
+
+```{r}
+lsmeans::lsmeans(rm1, ~treatment*gender) %>% 
+  broom::tidy() %>% 
+  ggplot(aes(treatment, estimate, 
+             ymin=conf.low, ymax=conf.high, 
+             color=gender, group=gender)) + 
+  geom_pointrange(position=position_dodge(width = .1))
+```
+
+
+
+Within a mixed-model framework, we can also allow for varying effects of phase/hour by participant:
+
+```{r}
+rm3 <- lmerTest::lmer(value ~ treatment * gender * hour * phase + (phase + hour | id), data=obk.long)
+lmerTest::anova(rm3)
+```
+
+
+And we can test whether the random effects are different to zero:
+
+```{r}
+lmerTest::rand(rm3)
+```
+
+
+
+
+
