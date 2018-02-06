@@ -7,7 +7,8 @@ output: tufte::tufte_handout
 
 # Pre-reqs
 
-```{r}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, include=T, message=F, warning = F)
 library(tidyverse)
 library(pander)
 library(broom)
